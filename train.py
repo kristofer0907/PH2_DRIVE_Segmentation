@@ -20,27 +20,18 @@ from lib.model.UNetModel import UNet, UNet2
 from lib.losses import BCELoss, WeightedBCELoss, FocalLoss
 
 # Dataset
-size = 128
-train_transform = transforms.Compose([transforms.Resize((size, size)),
-                                    transforms.ToTensor()])
-test_transform = transforms.Compose([transforms.Resize((size, size)),
-                                    transforms.ToTensor()])
-
+from seg_data import get_datasets
 batch_size = 6
-trainset = PhC(train=True, transform=train_transform)
-train_loader = DataLoader(trainset, batch_size=batch_size, shuffle=True,
-                          num_workers=3)
-testset = PhC(train=False, transform=test_transform)
-test_loader = DataLoader(testset, batch_size=batch_size, shuffle=False,
-                          num_workers=3)
-# IMPORTANT NOTE: There is no validation set provided here, but don't forget to
-# have one for the project
+ds = get_datasets("ph2")
+train_loader = DataLoader(ds["train"], batch_size=batch_size,shuffle = True, num_workers = 3)
+val_loader = DataLoader(ds["val"],batch_size = batch_size, shuffle = False, num_workers = 3)
+test_loader = DataLoader(ds["test"],batch_size = batch_size, shuffle = False, num_workers= 3)
 
-print(f"Loaded {len(trainset)} training images")
-print(f"Loaded {len(testset)} test images")
+print(f"Loaded {len(ds['train'])} train / {len(ds['val'])} val / {len(ds['test'])} test images")
 
 # Training setup
-device = ...
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 model = EncDec().to(device)
 #model = UNet().to(device) # TODO
 #model = UNet2().to(device) # TODO
@@ -63,7 +54,7 @@ for epoch in range(epochs):
     print(f'* Epoch {epoch+1}/{epochs}')
 
     avg_loss = 0
-    for X_batch, y_true in train_loader:
+    for X_batch, y_true, _ in train_loader:
         X_batch = X_batch.to(device)
         y_true = y_true.to(device)
 
@@ -79,7 +70,7 @@ for epoch in range(epochs):
         opt.step()  # update weights
 
         # calculate metrics to show the user
-        avg_loss += loss / len(train_loader)
+        avg_loss += loss.item() / len(train_loader)
 
     # IMPORTANT NOTE: It is a good practice to check performance on a
     # validation set after each epoch.
