@@ -17,7 +17,7 @@ from time import time
 from lib.model.EncDecModel import EncDec
 from lib.model.DilatedNetModel import DilatedNet
 from lib.model.UNetModel import UNet, UNet2
-from lib.losses import BCELoss, DiceLoss, FocalLoss, BCELoss_TotalVariation
+from lib.losses import BCELoss, WeightedBCELoss, FocalLoss
 
 # Dataset
 size = 128
