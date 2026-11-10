@@ -11,12 +11,12 @@ import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from torchvision import models
-from torchsummary import summary
+#from torchsummary import summary
 import torch.optim as optim
 from time import time
 from lib.model.EncDecModel import EncDec
-from lib.model.DilatedNetModel import DilatedNet
-from lib.model.UNetModel import UNet, UNet2
+# from lib.model.DilatedNetModel import DilatedNet
+# from lib.model.UNetModel import UNet, UNet2
 from lib.losses import BCELoss, WeightedBCELoss, FocalLoss
 
 # Dataset
@@ -47,7 +47,7 @@ loss_fn = BCELoss()
 epochs = 20
 
 # Training loop
-X_test, Y_test = next(iter(test_loader))
+X_test, Y_test, _ = next(iter(test_loader))
 model.train()  # train mode
 for epoch in range(epochs):
     tic = time()
@@ -79,5 +79,6 @@ for epoch in range(epochs):
     print(f' - loss: {avg_loss}')
 
 # Save the model
-torch.save(model, ....)
+os.makedirs("checkpoints", exist_ok=True)
+torch.save(model.state_dict(), "checkpoints/encdec_ph2.pt")
 print("Training has finished!")
