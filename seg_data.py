@@ -40,8 +40,9 @@ def list_drive():
     triples = []
     for img in sorted(glob.glob(os.path.join(DRIVE_DIR, "images", "*"))):
         idx = os.path.basename(img).split("_")[0]          # e.g. "21" from "21_training.tif"
-        vessel = find_one(os.path.join(DRIVE_DIR, "1st_manual", f"{idx}_*"))
-        fov = find_one(os.path.join(DRIVE_DIR, "mask", f"{idx}_*"))
+        vessel = find_one(os.path.join(DRIVE_DIR, "1st_manual", f"{idx}_*"))  # TARGET: vessel annotation
+        fov = find_one(os.path.join(DRIVE_DIR, "mask", f"{idx}_*"))           # field-of-view disc, metrics only
+        assert "1st_manual" in vessel, f"vessel mask must come from 1st_manual/, got {vessel}"
         triples.append((img, vessel, fov))
     return triples
 
@@ -97,7 +98,13 @@ def get_datasets(name, splits_file="splits.json"):
 if __name__ == "__main__":
     ph2, drive = list_ph2(), list_drive()
     print(f"PH2: {len(ph2)} cases, e.g. {ph2[0]}")
-    print(f"DRIVE: {len(drive)} labelled images, e.g. {drive[0]}")
+    print(f"DRIVE: {len(drive)} labelled images, e.g.")
+    print(f"   image : {drive[0][0]}\n   target: {drive[0][1]}\n   fov   : {drive[0][2]}")
+    for img_p, ves_p, _ in drive:  # a vessel mask covers ~10% of pixels, a FOV disc ~70%
+        frac = (np.array(Image.open(ves_p).convert("L")) > 127).mean()
+        if frac > 0.3:
+            raise ValueError(f"{ves_p} covers {frac:.0%} of the image: that is a disc, not vessels")
+    print("   all DRIVE targets look like vessel masks (<30% foreground)")
 
     splits = {"ph2": make_splits(len(ph2), (0.70, 0.15)),
               "drive": make_splits(len(drive), (0.70, 0.15))}
