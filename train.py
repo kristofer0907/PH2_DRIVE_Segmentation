@@ -103,7 +103,7 @@ def main():
 
     os.makedirs("checkpoints", exist_ok=True); os.makedirs("history", exist_ok=True)
     ckpt = f"checkpoints/{run}.pt"
-    best_dice, history = -1.0, []
+    best_dice, best_val_loss, history = -1.0, float("inf"), []
 
     for epoch in range(1, args.epochs + 1):
         tic = time.time()
@@ -120,8 +120,9 @@ def main():
         val_loss, val_m = evaluate(model, loaders["val"], loss_fn, device, use_fov)
         history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, "val_dice": val_m["dice"]})
         flag = ""
-        if val_m["dice"] > best_dice:
-            best_dice = val_m["dice"]
+        # best = highest val Dice; on a tie (e.g. Dice stuck at 0) prefer the lower val loss
+        if val_m["dice"] > best_dice or (val_m["dice"] == best_dice and val_loss < best_val_loss):
+            best_dice, best_val_loss = val_m["dice"], val_loss
             torch.save(model.state_dict(), ckpt)
             flag = "  <- best, saved"
         print(f"Epoch {epoch:3d}/{args.epochs}  train loss {train_loss:.4f}  val loss {val_loss:.4f}  "
