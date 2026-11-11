@@ -16,7 +16,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from seg_data import get_datasets
-from metrics import batch_metrics, METRIC_NAMES
+from measure import batch_metrics, METRIC_NAMES
 from lib.losses import BCELoss, WeightedBCELoss, FocalLoss
 from lib.model.EncDecModel import EncDec
 
