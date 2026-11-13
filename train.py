@@ -32,6 +32,8 @@ def get_args():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no_fov", action="store_true", help="DRIVE: count all pixels in metrics, not only the field of view")
     p.add_argument("--tag", default="", help="optional extra text in the run name")
+    p.add_argument("--clicks", type=int, default=0, help="Part 2: train on N positive + N negative clicks per image (0 = full masks)")
+    p.add_argument("--strategy", choices=["random", "center"], default="random", help="Part 2: click sampling strategy")
     return p.parse_args()
 
 
@@ -83,7 +85,9 @@ def main():
     args = get_args()
     set_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    run = f"{args.model}_{args.dataset}_{args.loss}" + (f"_{args.tag}" if args.tag else "")
+    points = args.clicks > 0
+    loss_name = f"points-{args.strategy}-{args.clicks}" if points else args.loss
+    run = f"{args.model}_{args.dataset}_{loss_name}" + (f"_{args.tag}" if args.tag else "")
     use_fov = args.dataset == "drive" and not args.no_fov
     print(f"Run {run} on {device}")
 
@@ -94,11 +98,17 @@ def main():
         "val": DataLoader(ds["val"], batch_size=args.batch_size, num_workers=3),
         "test": DataLoader(ds["test"], batch_size=args.batch_size, num_workers=3),
     }
+    if points:
+        from points import PointDataset, PointLoss
+        point_train = PointDataset(get_datasets(args.dataset)["train"],args.clicks, args.strategy, seed=args.seed)
+        loaders["train"] = DataLoader(point_train, batch_size=args.batch_size, shuffle = True, num_workers = 3)
+        print(f"Training on {args.clicks}+{args.clicks} clicks per image ({args.strategy} strategy)")
     loaders["train_eval"].dataset.augment = False  # evaluate training images without flips
     print(f"Images: {len(ds['train'])} train / {len(ds['val'])} val / {len(ds['test'])} test")
 
     model = build_model(args.model).to(device)
-    loss_fn = build_loss(args.loss, ds["train"], device)
+    loss_fn = BCELoss() if points else build_loss(args.loss, ds["train"], device)
+    point_loss = PointLoss() if points else None
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     os.makedirs("checkpoints", exist_ok=True); os.makedirs("history", exist_ok=True)
@@ -109,10 +119,10 @@ def main():
         tic = time.time()
         model.train()
         train_loss = 0.0
-        for X, Y, _ in loaders["train"]:
-            X, Y = X.to(device), Y.to(device)
+        for X, Y, M in loaders["train"]: #M = FOV mask (unused) or in pt.2 the click mask
+            X, Y, M  = X.to(device), Y.to(device), M.to(device)
             opt.zero_grad()
-            loss = loss_fn(model(X), Y)
+            loss = point_loss(model(X), Y, M) if points else loss_fn(model(X),Y)
             loss.backward()
             opt.step()
             train_loss += loss.item() / len(loaders["train"])
@@ -140,7 +150,7 @@ def main():
             w.writerow(["run", "dataset", "model", "loss", "split"] + METRIC_NAMES)
         for split, key in [("train", "train_eval"), ("val", "val"), ("test", "test")]:
             _, m = evaluate(model, loaders[key], loss_fn, device, use_fov)
-            w.writerow([run, args.dataset, args.model, args.loss, split] + [f"{m[k]:.4f}" for k in METRIC_NAMES])
+            w.writerow([run, args.dataset, args.model, loss_name, split] + [f"{m[k]:.4f}" for k in METRIC_NAMES])
             print(f"{split:5s} " + "  ".join(f"{k} {m[k]:.4f}" for k in METRIC_NAMES))
     print(f"Done. Best val Dice {best_dice:.4f}. Results appended to results.csv")
 
